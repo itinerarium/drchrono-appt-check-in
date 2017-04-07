@@ -9,4 +9,4 @@ def duration(td):
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
 
-    return '{} hours {} min'.format(hours, minutes)
+    return '{} hours, {} minutes'.format(hours, minutes)

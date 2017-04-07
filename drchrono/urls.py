@@ -8,6 +8,10 @@ urlpatterns = [
     url(r'^$', views.home, name='home'),
     # doctor view
     url(r'^doctor$', views.doctor, name='doctor'),
+    # admin view
+    url(r'^admin$', views.admin, name='admin'),
+    # timezone helper
+    url(r'^internal$', views.internal, name='internal'),
 
     # kiosk views
     ## error page

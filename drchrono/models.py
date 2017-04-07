@@ -26,6 +26,8 @@ class Visit(models.Model):
 class Kiosk(models.Model):
     guid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     doctor_id = models.IntegerField()
+    doctor_name = models.CharField(max_length=1024, null=True, blank=True)
+    timezone_name = models.CharField(max_length=1024, default='US/Eastern')
     refresh_token = models.CharField(max_length=24)
     access_token = models.CharField(max_length=60)
     expires_in = models.IntegerField() # seconds?

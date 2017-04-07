@@ -101,6 +101,17 @@ STATE_OPTIONS = (
     ('WY','Wyoming'),
 )
 
+TIMEZONE_OPTIONS = (
+    ('US/Eastern','US Eastern'),
+    ('US/Pacific','US Pacific'),
+    ('US/Central','US Central'),
+    ('US/Mountain','US Mountain'),
+    ('US/Alaska','Alaska'),
+    ('US/Arizona','Arizona'),
+    ('US/Hawaii','Hawaii'),
+    ('UTC','Coordinated Universal Time'),
+)
+
 # forms go here
 class AppointmentSelectionForm(forms.Form):
     appt_id = forms.CharField(max_length=1024) # described in API as either a number or 'Unique identifier. Usually numeric, but not always.'
@@ -110,16 +121,17 @@ class PatientVerificationForm(forms.Form):
     first_name = forms.CharField(max_length=255, required=False)
     last_name = forms.CharField(max_length=255, required=False)
     gender = forms.ChoiceField(choices=GENDER_OPTIONS)
+    date_of_birth = forms.DateField(required=False, widget=forms.TextInput(attrs={'placeholder': 'MM/DD/YYYY'}))
 
 class PatientUpdateForm(forms.Form):
     appt_id = forms.CharField(widget=forms.HiddenInput(),max_length=1024)
-    social_security_number = forms.CharField(max_length=11, required=False, label='SSN, if available')
+    #social_security_number = forms.CharField(max_length=11, required=False, label='SSN, if available')
     preferred_language = forms.ChoiceField(choices=LANGUAGE_OPTIONS, required=False, label='Preferred Language')
 
     cell_phone = forms.CharField(max_length=1024, required=False, label='Mobile/SMS-capable phone')
     home_phone = forms.CharField(max_length=1024, required=False, label='Home Phone')
 
-    address = forms.CharField(max_length=1024, required=False, label='Street')
+    address = forms.CharField(max_length=1024, required=False, label='Street',)
     city = forms.CharField(max_length=1024, required=False, label='City')
     state = forms.ChoiceField(choices=STATE_OPTIONS, required=False, label='State')
     zip_code = forms.CharField(max_length=10, required=False, label='ZIP')
@@ -136,3 +148,9 @@ class PatientUpdateForm(forms.Form):
 
     race = forms.ChoiceField(choices=RACE_OPTIONS, required=False, label='Race')
     ethnicity = forms.ChoiceField(choices=ETHNICITY_OPTIONS, required=False, label='Ethnicity')
+
+class SettingsUpdateForm(forms.Form):
+    timezone = forms.ChoiceField(choices=TIMEZONE_OPTIONS, label="Timezone")
+
+class TerminateKioskInstanceForm(forms.Form):
+    action = forms.CharField(max_length=1024, required=False, label='Enter terminate below to sign out of your kiosks')

@@ -1,5 +1,5 @@
 # Create your views here.
-import datetime, requests, urllib
+import datetime, requests, urllib, pytz
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test, login_required, permission_required
@@ -8,7 +8,7 @@ import dateutil.parser
 from django.utils import timezone
 
 from drchrono.models import Kiosk, Visit, Average_wait
-from drchrono.forms import AppointmentSelectionForm, PatientVerificationForm, PatientUpdateForm
+from drchrono.forms import AppointmentSelectionForm, PatientVerificationForm, PatientUpdateForm, SettingsUpdateForm, SettingsUpdateForm, TerminateKioskInstanceForm
 
 def check_current_access(user):
     access_token = user.social_auth.get(provider='drchrono').extra_data['access_token']
@@ -33,7 +33,7 @@ def api_get(access_token, url, params=None):
 def api_patch(access_token, url, data):
     header = { 'Authorization': 'Bearer %s' % access_token }
     response = requests.patch(url, headers=header, data=data)
-    if response.status_code not in (200, 204):
+    if response.status_code != 204:
         return False
     return True
     # TODO: handle failures; assume success for now
@@ -52,17 +52,26 @@ def home(request):
 
             kiosk_instance = Kiosk.objects.get_or_none(doctor_id = current_doctor['doctor'])
 
-            # TODO: refresh token every half hour?
             if not kiosk_instance:
                 kiosk_instance = Kiosk(doctor_id=current_doctor['doctor'], refresh_token=request.user.social_auth.get(provider='drchrono').extra_data['refresh_token'], access_token=request.user.social_auth.get(provider='drchrono').extra_data['access_token'], expires_in=request.user.social_auth.get(provider='drchrono').extra_data['expires_in'],
-                expire_check_time=datetime.datetime.utcnow())
+                expire_check_time=timezone.now())
                 kiosk_instance.save()
-            elif kiosk_instance.expire_check_time + datetime.timedelta(0, kiosk_instance.expires_in) < timezone.now() + datetime.timedelta(0, 3600):
+            else:
+                # always update token in case deauthorization and authorization
                 kiosk_instance.refresh_token=request.user.social_auth.get(provider='drchrono').extra_data['refresh_token']
                 kiosk_instance.access_token=request.user.social_auth.get(provider='drchrono').extra_data['access_token']
                 kiosk_instance.expires_in=request.user.social_auth.get(provider='drchrono').extra_data['expires_in']
-                kiosk_instance.expire_check_time=datetime.datetime.utcnow()
+                kiosk_instance.expire_check_time=timezone.now()
                 kiosk_instance.save()
+
+            doctor_info = api_get(access_token, 'https://drchrono.com/api/doctors/'+str(current_doctor['doctor']))
+
+            if doctor_info == False:
+                logout(request)
+                return render(request, 'index.html', { 'user_access_status': False })
+
+            kiosk_instance.doctor_name = doctor_info['first_name']
+            kiosk_instance.save()
 
             wait_object = Average_wait.objects.get_or_none(doctor_id=current_doctor['doctor'])
             if not wait_object:
@@ -72,6 +81,9 @@ def home(request):
                 wait_object.save()
 
             logout(request)
+
+            # set time zone
+            request.session['django_timezone'] = kiosk_instance.timezone_name
 
             return redirect('kiosk', instance_guid=kiosk_instance.guid)
         else:
@@ -90,19 +102,18 @@ def kiosk(request, instance_guid):
     appts_response = api_get(instance.access_token, 'https://drchrono.com/api/appointments', {'doctor': instance.doctor_id, 'date': str(datetime.date.today())})
 
     if appts_response == False:
-        logout(request)
-        return render(request, 'index.html', { 'user_access_status': False })
+        return redirect('home')
 
     appts_for_day = []
     for appt in appts_response['results']: # returned in order
-        if not appt['status'] and appt['patient']:
+        if appt['status'] in ('', 'Confirmed') and appt['patient']:
             appt_object = {}
             appt_object['id'] = appt['id']
             appt_object['patient'] = appt['patient']
             appt_object['scheduled_time'] = dateutil.parser.parse(appt['scheduled_time'])
             appts_for_day.append(appt_object)
 
-    return render(request, 'kiosk.html', { 'appts_for_day': appts_for_day, 'instance_guid': instance_guid })
+    return render(request, 'kiosk.html', { 'appts_for_day': appts_for_day, 'instance_guid': instance_guid, 'kiosk_name': instance.doctor_name, 'now': timezone.now() })
 
 def checkin(request, instance_guid):
     if request.method == 'POST':
@@ -116,10 +127,9 @@ def checkin(request, instance_guid):
             appt = api_get(instance.access_token, 'https://drchrono.com/api/appointments/'+str(appt_id))
 
             if appt == False:
-                logout(request)
-                return render(request, 'index.html', { 'user_access_status': False })
+                return redirect('home')
 
-            if appt['doctor'] != instance.doctor_id or appt['status'] != '':
+            if appt['doctor'] != instance.doctor_id or appt['status'] not in ('', 'Confirmed'):
                 return redirect('error', instance_guid=instance_guid)
 
             form = PatientVerificationForm(initial={ 'appt_id': appt_id })
@@ -142,17 +152,15 @@ def update(request, instance_guid):
             appt = api_get(instance.access_token, 'https://drchrono.com/api/appointments/'+str(appt_id))
 
             if appt == False:
-                logout(request)
-                return render(request, 'index.html', { 'user_access_status': False })
+                return redirect('home')
 
-            if appt['doctor'] != instance.doctor_id or appt['status'] != '':
+            if appt['doctor'] != instance.doctor_id or appt['status'] not in ('', 'Confirmed'):
                 return redirect('error', instance_guid=instance_guid)
 
             patient = api_get(instance.access_token, 'https://drchrono.com/api/patients/'+str(appt['patient']))
 
             if patient == False:
-                logout(request)
-                return render(request, 'index.html', { 'user_access_status': False })
+                return redirect('home')
 
             if patient['gender'] and patient['gender'] != form.cleaned_data.get('gender'):
                 return redirect('error', instance_guid=instance_guid)
@@ -161,6 +169,9 @@ def update(request, instance_guid):
                 return redirect('error', instance_guid=instance_guid)
 
             if patient['last_name'] and patient['last_name'] != form.cleaned_data.get('last_name'):
+                return redirect('error', instance_guid=instance_guid)
+
+            if patient['date_of_birth'] and str(patient['date_of_birth']) != str(form.cleaned_data.get('date_of_birth')):
                 return redirect('error', instance_guid=instance_guid)
 
             patient['appt_id'] = appt_id
@@ -184,10 +195,9 @@ def complete(request, instance_guid):
             appt = api_get(instance.access_token, 'https://drchrono.com/api/appointments/'+str(appt_id))
 
             if appt == False:
-                logout(request)
-                return render(request, 'index.html', { 'user_access_status': False })
+                return redirect('home')
 
-            if appt['doctor'] != instance.doctor_id or appt['status'] != '':
+            if appt['doctor'] != instance.doctor_id or appt['status'] not in ('', 'Confirmed'):
                 return redirect('error', instance_guid=instance_guid)
 
             api_patch(instance.access_token, 'https://drchrono.com/api/patients/'+str(appt['patient']), form.cleaned_data)
@@ -204,6 +214,13 @@ def complete(request, instance_guid):
     else:
         return redirect('error', instance_guid=instance_guid)
 
+def error(request, instance_guid):
+    return render(request, 'error.html', { 'instance_guid': instance_guid })
+
+def leave(request):
+    logout(request)
+    return redirect('home')
+
 @login_required
 def doctor(request):
     access_token = request.user.social_auth.get(provider = 'drchrono').extra_data['access_token']
@@ -211,8 +228,7 @@ def doctor(request):
     current_doctor = api_get(access_token, 'https://drchrono.com/api/users/current')
 
     if current_doctor == False:
-        logout(request)
-        return render(request, 'index.html', { 'user_access_status': False })
+        return redirect('home')
 
     doctor_id = current_doctor['doctor']
 
@@ -234,15 +250,13 @@ def doctor(request):
 
                 if wait_object:
                     wait_object.visit_count += 1
-                    #! TODO: revisit time sum
                     wait_object.time_sum = wait_object.time_sum +  (visit.time_seen-visit.arrival_time)
                     wait_object.save()
 
     appts_response = api_get(access_token, 'https://drchrono.com/api/appointments', {'doctor': doctor_id, 'date': str(datetime.date.today())})
 
     if appts_response == False:
-        logout(request)
-        return render(request, 'index.html', { 'user_access_status': False })
+        return redirect('home')
 
     appts_for_day = []
     now = timezone.now()
@@ -258,6 +272,11 @@ def doctor(request):
                 visit = Visit.objects.get_or_none(appt_id=appt['id'])
                 if visit:
                     appt_object['arrival_time'] = visit.arrival_time
+
+            if appt['status'] in ('In Session', 'Complete'):
+                visit = Visit.objects.get_or_none(appt_id=appt['id'])
+                if visit and visit.arrival_time and visit.time_seen:
+                    appt_object['wait_time'] = visit.time_seen - visit.arrival_time
             appts_for_day.append(appt_object)
 
     wait_object = Average_wait.objects.get_or_none(doctor_id=doctor_id)
@@ -267,11 +286,85 @@ def doctor(request):
 
     wait = wait_object.time_sum / wait_divisor
 
-    return render(request, 'doctor.html', { 'appts_for_day': appts_for_day, 'wait': wait, 'now': datetime.datetime.utcnow() })
+    return render(request, 'doctor.html', { 'appts_for_day': appts_for_day, 'wait': wait, 'now': timezone.now() })
 
-def error(request, instance_guid):
-    return render(request, 'error.html', { 'instance_guid': instance_guid })
+@login_required
+def admin(request):
+    access_token = request.user.social_auth.get(provider = 'drchrono').extra_data['access_token']
 
-def leave(request):
-    logout(request)
-    return redirect('home')
+    current_doctor = api_get(access_token, 'https://drchrono.com/api/users/current')
+
+    if current_doctor == False:
+        return redirect('home')
+
+    doctor_id = current_doctor['doctor']
+
+    if request.method == 'POST':
+        form = AppointmentSelectionForm(request.POST)
+        if form.is_valid():
+            appt_id = form.cleaned_data.get('appt_id')
+            # patch
+            url = 'https://drchrono.com/api/appointments/'+str(appt_id)
+            result = api_patch(access_token, url, { 'status': 'Cancelled' })
+
+            # update objects
+            visit = Visit.objects.get_or_none(appt_id=str(appt_id))
+            if visit:
+                visit.delete()
+
+        # HACK: just try to reparse the form
+        form = SettingsUpdateForm(request.POST)
+        if form.is_valid():
+            instance = Kiosk.objects.get_or_none(doctor_id=doctor_id)
+            if not instance:
+                logout(request)
+                return redirect('home')
+            instance.timezone_name = form.cleaned_data.get('timezone')
+            instance.save()
+            logout(request)
+            return redirect('home')
+
+        form = TerminateKioskInstanceForm(request.POST)
+        if form.is_valid() and form.cleaned_data.get('action') == 'terminate':
+            instance = Kiosk.objects.get_or_none(doctor_id=doctor_id)
+            instance.delete()
+            logout(request)
+            return redirect('home')
+
+    appts_response = api_get(access_token, 'https://drchrono.com/api/appointments', {'doctor': doctor_id, 'date': str(datetime.date.today())})
+
+    if appts_response == False:
+        return redirect('home')
+
+    appts_for_day = []
+    for appt in appts_response['results']: # returned in order
+        if appt['patient']:
+            appt_object = {}
+            appt_object['status'] = appt['status']
+            appt_object['id'] = appt['id']
+            appt_object['patient'] = appt['patient']
+            appt_object['scheduled_time'] = dateutil.parser.parse(appt['scheduled_time'])
+            appts_for_day.append(appt_object)
+
+    form = SettingsUpdateForm(initial={ 'timezone': request.session['django_timezone'] })
+    end_form = TerminateKioskInstanceForm()
+
+    return render(request, 'admin.html', { 'appts_for_day': appts_for_day, 'form': form, 'end_form': end_form })
+
+@login_required
+def internal(request):
+    access_token = request.user.social_auth.get(provider = 'drchrono').extra_data['access_token']
+
+    current_doctor = api_get(access_token, 'https://drchrono.com/api/users/current')
+
+    if current_doctor == False:
+        return redirect('home')
+
+    doctor_id = current_doctor['doctor']
+
+    instance = Kiosk.objects.get_or_none(doctor_id=doctor_id)
+    if not instance:
+        return redirect('home')
+    request.session['django_timezone'] = instance.timezone_name
+
+    return redirect('doctor')

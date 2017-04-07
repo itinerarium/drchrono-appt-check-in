@@ -6,21 +6,25 @@
 {% block head %}<meta http-equiv="refresh" content="60" />{% endblock %}
 
 {% block main %}
-<p style="text-align: right"><a href="{% url 'logout' %}">log out</a></p>
+<p style="text-align: right">{{ user.username }} | <a href="{% url 'admin' %}">exceptions/settings</a> | <a href="{% url 'logout' %}">log out</a></p>
 
 <div>
-  <h1>Appointments for the day</h1>
+  <h1>Appointments</h1>
 </div>
 
 <p class="lead">Average wait time: {{ wait | duration }}</p>
 
+<p>Last updated: {{ now }}</p>
+
 {% for appt in appts_for_day %}
-<form method="post" action="">
+<form method="post" action="{% url 'doctor' %}">
   {% csrf_token %}
   {% if appt.status == 'Arrived' and appt.arrival_time %}
-    <input style="margin-top: 20px;" type="submit" class="btn btn-lg btn-block btn-default" value="{{ appt.scheduled_time | date:"F j: g:i a" }} | tap to see #{{ appt.id }} | {{ appt.arrival_time | timesince  }}" />
+    <input style="margin-top: 20px;" type="submit" class="btn btn-lg btn-block btn-default" value="{{ appt.scheduled_time | date:"F j: g:i a" }} | #{{ appt.id }} | {{ appt.arrival_time | timesince  }}" />
+  {% elif appt.status == 'Arrived' %}
+    <input style="margin-top: 20px;" type="submit" class="btn btn-lg btn-block btn-default" value="{{ appt.scheduled_time | date:"F j: g:i a" }} | *#{{ appt.id }}" />
   {% else %}
-    <span style="margin-top: 20px;" class="btn btn-lg btn-block btn-default disabled">{{ appt.scheduled_time | date:"F j: g:i a" }} | #{{ appt.id }} | {{ appt.status|default:'Not ready' }}</span>
+    <span style="margin-top: 20px;" class="btn btn-lg btn-block btn-default disabled">{{ appt.scheduled_time | date:"F j: g:i a" }} | #{{ appt.id }} | {% if appt.wait_time %} {{ appt.wait_time | duration}} {% else %} {{ appt.status|default:'Not ready' }} {% endif %}</span>
   {% endif %}
   <input type="hidden" name="appt_id" value="{{ appt.id }}" />
 </form>

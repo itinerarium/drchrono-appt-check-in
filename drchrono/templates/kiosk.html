@@ -6,7 +6,7 @@
 
 {% block main %}
 <div>
-  <h1>Welcome</h1>
+  <h1>Welcome{% if kiosk_name %} from Dr. {{ kiosk_name }}{% endif %}</h1>
   <p class="lead">Tap on your appointment time below to indicate that you have arrived. If you do not see your appointment time or have a question, please contact a staff member for assistance.</p>
 </div>
 
@@ -19,5 +19,9 @@
 {% empty %}
 <p>No appointments have found for the near future.</p>
 {% endfor %}
+
+<hr />
+
+<p>Last updated: {{ now }}</p>
 
 {% endblock %}
