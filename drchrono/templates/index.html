@@ -1,8 +1,24 @@
-<!DOCTYPE html>
-<html>
-  <body>
-    <a href="{% url 'social:begin' 'drchrono' %}">
-      drchrono OAuth
-    </a>
-  </body>
-</html>
+{% extends 'base.html' %}
+
+{% block title %}drchrono appointment kiosk{% endblock %}
+
+{% block main %}
+<div>
+  <h1>drchrono appointment kiosk</h1>
+  <p class="lead">The drchrono appointment kiosk offers patients a paperless, digital check-in experience and offers doctors an opportunity to gather and view patient wait time metrics using the drchrono <abbr title="Application Programming Interface">API</abbr>.</p>
+</div>
+
+{% if user_access_status %}
+<div>
+  <p class="bg-danger" style="padding: 15px;">It seems that we are unable to access the information needed for this project (access grant failure or endpoint is currently unavailable). Please contact us for assistance.</p>
+</div>
+{% endif %}
+
+<div>
+  <a href="{% url 'social:begin' 'drchrono' %}" class="btn btn-primary btn-lg btn-block">Launch check-in kiosk</a>
+</div>
+
+<div style="margin-top: 20px;">
+  <a href="{% url 'doctor' %}" class="btn btn-default btn-lg btn-block">Launch internal doctor view</a>
+</div>
+{% endblock %}

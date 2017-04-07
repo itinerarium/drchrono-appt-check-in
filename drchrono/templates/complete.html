@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}drchrono appointment kiosk{% endblock %}
+
+{% block head %}<meta http-equiv="refresh" content="60; url={% url 'kiosk' instance_guid=instance_guid %}" />{% endblock %}
+
+{% block main %}
+<div>
+  <h1>Hi again!</h1>
+  <p class="lead">We've registered you for your appointment. You will be seen soon.</p>
+</div>
+
+<div style="margin-top: 20px;">
+  <a href="{% url 'kiosk' instance_guid=instance_guid %}" class="btn btn-success btn-lg btn-block">I'm done! Reset for next patient.</a>
+</div>
+
+{% endblock %}

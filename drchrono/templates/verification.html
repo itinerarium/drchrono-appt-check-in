@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}drchrono appointment kiosk{% endblock %}
+
+{% block main %}
+<div>
+  <h1>Hello</h1>
+  <p class="lead">Please confirm your identity by filling out the following details.</p>
+</div>
+
+<form method="POST" action="{% url 'update' instance_guid=instance_guid %}">
+
+{% csrf_token %}
+
+{{ form.as_p }}
+
+<input type="submit" class="btn btn-success btn-lg btn-block" value="Verify identity" />
+
+</form>
+
+<div style="margin-top: 20px;">
+  <a href="{% url 'kiosk' instance_guid=instance_guid %}" class="btn btn-default btn-lg btn-block">Cancel and return to kiosk.</a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load extras %}
+
+{% block title %}drchrono appointments{% endblock %}
+
+{% block head %}<meta http-equiv="refresh" content="60" />{% endblock %}
+
+{% block main %}
+<p style="text-align: right"><a href="{% url 'logout' %}">log out</a></p>
+
+<div>
+  <h1>Appointments for the day</h1>
+</div>
+
+<p class="lead">Average wait time: {{ wait | duration }}</p>
+
+{% for appt in appts_for_day %}
+<form method="post" action="">
+  {% csrf_token %}
+  {% if appt.status == 'Arrived' and appt.arrival_time %}
+    <input style="margin-top: 20px;" type="submit" class="btn btn-lg btn-block btn-default" value="{{ appt.scheduled_time | date:"F j: g:i a" }} | tap to see #{{ appt.id }} | {{ appt.arrival_time | timesince  }}" />
+  {% else %}
+    <span style="margin-top: 20px;" class="btn btn-lg btn-block btn-default disabled">{{ appt.scheduled_time | date:"F j: g:i a" }} | #{{ appt.id }} | {{ appt.status|default:'Not ready' }}</span>
+  {% endif %}
+  <input type="hidden" name="appt_id" value="{{ appt.id }}" />
+</form>
+{% empty %}
+  <p>No appointments have found for the near future.</p>
+{% endfor %}
+
+{% endblock %}
