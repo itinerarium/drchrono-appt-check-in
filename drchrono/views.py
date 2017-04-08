@@ -98,19 +98,29 @@ def kiosk(request, instance_guid):
         return redirect('home')
 
     # TODO: assuming instance access/credentials have not been revoked
-    # TODO: appointment sliding windows
-    appts_response = api_get(instance.access_token, 'https://drchrono.com/api/appointments', {'doctor': instance.doctor_id, 'date': str(datetime.date.today())})
+    date_range = str(datetime.date.today() - datetime.timedelta(hours=instance.hours_before))+'/'+str(datetime.date.today() + datetime.timedelta(hours=instance.hours_after))
+
+    appts_response = api_get(instance.access_token, 'https://drchrono.com/api/appointments', {'doctor': instance.doctor_id, 'date_range': date_range})
 
     if appts_response == False:
         return redirect('home')
 
+    appt_time_lower = timezone.now() - datetime.timedelta(hours=instance.hours_before)
+    appt_time_upper = timezone.now() + datetime.timedelta(hours=instance.hours_after)
+
     appts_for_day = []
     for appt in appts_response['results']: # returned in order
-        if appt['status'] in ('', 'Confirmed') and appt['patient']:
+        if appt['scheduled_time']:
+            appt_time = dateutil.parser.parse(appt['scheduled_time'])
+
+            tz = timezone.get_current_timezone()
+            appt_time = tz.localize(appt_time)
+
+        if appt['status'] in ('', 'Confirmed') and appt['patient'] and appt_time >= appt_time_lower and appt_time <= appt_time_upper:
             appt_object = {}
             appt_object['id'] = appt['id']
             appt_object['patient'] = appt['patient']
-            appt_object['scheduled_time'] = dateutil.parser.parse(appt['scheduled_time'])
+            appt_object['scheduled_time'] = appt_time
             appts_for_day.append(appt_object)
 
     return render(request, 'kiosk.html', { 'appts_for_day': appts_for_day, 'instance_guid': instance_guid, 'kiosk_name': instance.doctor_name, 'now': timezone.now() })
@@ -253,20 +263,38 @@ def doctor(request):
                     wait_object.time_sum = wait_object.time_sum +  (visit.time_seen-visit.arrival_time)
                     wait_object.save()
 
-    appts_response = api_get(access_token, 'https://drchrono.com/api/appointments', {'doctor': doctor_id, 'date': str(datetime.date.today())})
+    instance = Kiosk.objects.get_or_none(doctor_id=doctor_id)
+    if not instance:
+        logut(request)
+        return redirect('home')
+
+    date_range = str(datetime.date.today() - datetime.timedelta(hours=instance.hours_before))+'/'+str(datetime.date.today() + datetime.timedelta(hours=instance.hours_after))
+
+    appts_response = api_get(instance.access_token, 'https://drchrono.com/api/appointments', {'doctor': instance.doctor_id, 'date_range': date_range})
 
     if appts_response == False:
         return redirect('home')
 
-    appts_for_day = []
+    appt_time_lower = timezone.now() - datetime.timedelta(hours=instance.hours_before)
+    appt_time_upper = timezone.now() + datetime.timedelta(hours=instance.hours_after)
+
     now = timezone.now()
+
+    appts_for_day = []
+
     for appt in appts_response['results']: # returned in order
-        if appt['patient']:
+        if appt['scheduled_time']:
+            appt_time = dateutil.parser.parse(appt['scheduled_time'])
+
+            tz = timezone.get_current_timezone()
+            appt_time = tz.localize(appt_time)
+
+        if appt['patient'] and appt_time >= appt_time_lower and appt_time <= appt_time_upper:
             appt_object = {}
             appt_object['status'] = appt['status']
             appt_object['id'] = appt['id']
             appt_object['patient'] = appt['patient']
-            appt_object['scheduled_time'] = dateutil.parser.parse(appt['scheduled_time'])
+            appt_object['scheduled_time'] = appt_time
 
             if appt['status'] == 'Arrived':
                 visit = Visit.objects.get_or_none(appt_id=appt['id'])
@@ -331,19 +359,39 @@ def admin(request):
             logout(request)
             return redirect('home')
 
-    appts_response = api_get(access_token, 'https://drchrono.com/api/appointments', {'doctor': doctor_id, 'date': str(datetime.date.today())})
+    instance = Kiosk.objects.get_or_none(doctor_id=doctor_id)
+    if not instance:
+        logut(request)
+        return redirect('home')
+
+    date_range = str(datetime.date.today() - datetime.timedelta(hours=instance.hours_before))+'/'+str(datetime.date.today() + datetime.timedelta(hours=instance.hours_after))
+
+    appts_response = api_get(instance.access_token, 'https://drchrono.com/api/appointments', {'doctor': instance.doctor_id, 'date_range': date_range})
 
     if appts_response == False:
         return redirect('home')
 
+    appt_time_lower = timezone.now() - datetime.timedelta(hours=instance.hours_before)
+    appt_time_upper = timezone.now() + datetime.timedelta(hours=instance.hours_after)
+
+    now = timezone.now()
+
     appts_for_day = []
+
     for appt in appts_response['results']: # returned in order
-        if appt['patient']:
+        if appt['scheduled_time']:
+            appt_time = dateutil.parser.parse(appt['scheduled_time'])
+
+            tz = timezone.get_current_timezone()
+            appt_time = tz.localize(appt_time)
+
+        if appt['patient'] and appt_time >= appt_time_lower and appt_time <= appt_time_upper:
             appt_object = {}
             appt_object['status'] = appt['status']
             appt_object['id'] = appt['id']
             appt_object['patient'] = appt['patient']
-            appt_object['scheduled_time'] = dateutil.parser.parse(appt['scheduled_time'])
+            appt_object['scheduled_time'] = appt_time
+
             appts_for_day.append(appt_object)
 
     form = SettingsUpdateForm(initial={ 'timezone': request.session['django_timezone'] })

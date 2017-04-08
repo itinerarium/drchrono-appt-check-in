@@ -112,6 +112,21 @@ TIMEZONE_OPTIONS = (
     ('UTC','Coordinated Universal Time'),
 )
 
+HOUR_OPTIONS = (
+    (1,'1 hour'),
+    (2,'2 hours'),
+    (3,'3 hours'),
+    (4,'4 hours'),
+    (5,'5 hour'),
+    (6,'6 hours'),
+    (7,'7 hours'),
+    (8,'8 hours'),
+    (9,'9 hour'),
+    (10,'10 hours'),
+    (11,'11 hours'),
+    (12,'12 hours'),
+)
+
 # forms go here
 class AppointmentSelectionForm(forms.Form):
     appt_id = forms.CharField(max_length=1024) # described in API as either a number or 'Unique identifier. Usually numeric, but not always.'
@@ -151,6 +166,8 @@ class PatientUpdateForm(forms.Form):
 
 class SettingsUpdateForm(forms.Form):
     timezone = forms.ChoiceField(choices=TIMEZONE_OPTIONS, label="Timezone")
+#    hours_before = forms.ChoiceField(choices=HOUR_OPTIONS, label="Start of appointment window (hours ago)")
+#    hours_after = forms.ChoiceField(choices=HOUR_OPTIONS, label="End of appointment window (hours later)")
 
 class TerminateKioskInstanceForm(forms.Form):
     action = forms.CharField(max_length=1024, required=False, label='Enter terminate below to sign out of your kiosks')

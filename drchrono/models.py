@@ -33,6 +33,9 @@ class Kiosk(models.Model):
     expires_in = models.IntegerField() # seconds?
     expire_check_time = models.DateTimeField(auto_now_add=True)
 
+    hours_before = models.IntegerField(default=4)
+    hours_after = models.IntegerField(default=4)
+
     objects = GetOrNoneManager()
 
 class Average_wait(models.Model):
