@@ -75,7 +75,7 @@ def home(request):
 
             wait_object = Average_wait.objects.get_or_none(doctor_id=current_doctor['doctor'])
             if not wait_object:
-                wait_object = Average_wait(doctor_id=doctor_id)
+                wait_object = Average_wait(doctor_id=current_doctor['doctor'])
                 wait_object.time_sum = datetime.timedelta(0)
                 wait_object.visit_count = 0
                 wait_object.save()
